@@ -123,18 +123,33 @@ class IndexPhpFilters extends DefaultFilters
 
   public function getSqlField($field)
   {
+  include "cdash/config.php";
+
   $sql_field = '';
   switch (strtolower($field))
   {
     case 'buildduration':
     {
-      $sql_field = "ROUND(TIMESTAMPDIFF(SECOND,b.starttime,b.endtime)/60.0,1)";
+      if($CDASH_DB_TYPE == "pgsql")
+      {
+        $sql_field = "round((extract(EPOCH FROM b.endtime - b.starttime)/60)::numeric, 1)";
+      }
+      else
+      {
+        $sql_field = "ROUND(TIMESTAMPDIFF(SECOND,b.starttime,b.endtime)/60.0,1)";
+      }
     }
     break;
 
     case 'builderrors':
     {
-      $sql_field = "IF((SELECT COUNT(buildid) FROM builderror WHERE buildid=b.id AND type='0')>0, (SELECT COUNT(buildid) FROM builderror WHERE buildid=b.id AND type='0'), IF((SELECT COUNT(buildid) FROM buildfailure WHERE buildid=b.id AND type='0')>0, (SELECT COUNT(buildid) FROM buildfailure WHERE buildid=b.id AND type='0'), 0))";
+      $sql_field = "CASE
+                      WHEN (SELECT count(buildid) FROM builderror WHERE buildid=b.id AND type='0') > 0
+                        THEN (SELECT count(buildid) FROM builderror WHERE buildid=b.id AND type='0')
+                      WHEN (SELECT count(buildid) FROM buildfailure WHERE buildid=b.id AND type='0') > 0
+                        THEN (SELECT count(buildid) FROM buildfailure WHERE buildid=b.id AND type='0')
+                      ELSE 0
+                    END";
     }
     break;
 
@@ -170,13 +185,26 @@ class IndexPhpFilters extends DefaultFilters
 
     case 'buildwarnings':
     {
-      $sql_field = "IF((SELECT COUNT(buildid) FROM builderror WHERE buildid=b.id AND type='1')>0, (SELECT COUNT(buildid) FROM builderror WHERE buildid=b.id AND type='1'), IF((SELECT COUNT(buildid) FROM buildfailure WHERE buildid=b.id AND type='1')>0, (SELECT COUNT(buildid) FROM buildfailure WHERE buildid=b.id AND type='1'), 0))";
+      $sql_field = "CASE
+                      WHEN (SELECT count(buildid) FROM builderror WHERE buildid=b.id AND type='1') > 0
+                        THEN (SELECT count(buildid) FROM builderror WHERE buildid=b.id AND type='1')
+                      WHEN (SELECT count(buildid) FROM buildfailure WHERE buildid=b.id AND type='1') > 0
+                        THEN (SELECT count(buildid) FROM buildfailure WHERE buildid=b.id AND type='1')
+                      ELSE 0
+                    END";
     }
     break;
 
     case 'configureduration':
     {
-      $sql_field = "(SELECT ROUND(TIMESTAMPDIFF(SECOND,starttime,endtime)/60.0,1) FROM configure WHERE buildid=b.id)";
+      if($CDASH_DB_TYPE == "pgsql")
+      {
+        $sql_field = "(SELECT round((extract(EPOCH FROM endtime - starttime)/60)::numeric, 1) FROM configure WHERE buildid=b.id)";
+      }
+      else
+      {
+        $sql_field = "(SELECT ROUND(TIMESTAMPDIFF(SECOND,starttime,endtime)/60.0,1) FROM configure WHERE buildid=b.id)";
+      }
     }
     break;
 
@@ -194,7 +222,7 @@ class IndexPhpFilters extends DefaultFilters
 
     case 'expected':
     {
-      $sql_field = "IF((SELECT COUNT(expected) FROM build2grouprule WHERE groupid=b2g.groupid AND buildtype=b.type AND buildname=b.name AND siteid=b.siteid)>0,(SELECT COUNT(expected) FROM build2grouprule WHERE groupid=b2g.groupid AND buildtype=b.type AND buildname=b.name AND siteid=b.siteid),0)";
+      $sql_field = "(SELECT COUNT(expected) FROM build2grouprule WHERE groupid=b2g.groupid AND buildtype=b.type AND buildname=b.name AND siteid=b.siteid)";
     }
     break;
 
@@ -266,27 +294,45 @@ class IndexPhpFilters extends DefaultFilters
 
     case 'testsduration':
     {
-      $sql_field = "IF((SELECT COUNT(buildid) FROM build2test WHERE buildid=b.id)>0,(SELECT ROUND(SUM(time)/60.0,1) FROM build2test WHERE buildid=b.id),0)";
+      $sql_field = "CASE
+                      WHEN (SELECT count(buildid) FROM build2test WHERE buildid=b.id) > 0
+                        THEN (SELECT round(sum(time)/60.0, 1) FROM build2test WHERE buildid=b.id)
+                      ELSE 0
+                    END";
     }
     break;
 
     case 'testtimestatus':
-      {
-      $sql_field = "IF((SELECT COUNT(buildid) FROM build2test WHERE buildid=b.id)>0,(SELECT COUNT(buildid) FROM build2test WHERE buildid=b.id AND timestatus>=(SELECT testtimemaxstatus FROM project WHERE project.id=b.projectid)),0)";
-      }
+    {
+      $sql_field = "CASE
+                      WHEN (SELECT count(buildid) FROM build2test WHERE buildid=b.id) > 0
+                        THEN (SELECT count(buildid) FROM build2test WHERE buildid=b.id AND timestatus>=(SELECT testtimemaxstatus FROM project WHERE project.id=b.projectid))
+                      ELSE 0
+                    END";
+    }
     break;
 
     case 'updatedfiles':
-      {
+    {
       $sql_field = "(SELECT COUNT(uf.updateid) FROM updatefile AS uf, build2update AS b2u WHERE b2u.updateid=uf.updateid AND b2u.buildid=b.id)";
-      }
+    }
     break;
 
     case 'updateduration':
+    {
+      if($CDASH_DB_TYPE == "pgsql")
       {
-      $sql_field = "IF((SELECT COUNT(*) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id)>0,(SELECT ROUND(TIMESTAMPDIFF(SECOND,starttime,endtime)/60.0,1)
-                    FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id),0)";
+        $sql_field = "CASE
+                        WHEN (SELECT count(*) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id) > 0
+                          THEN (SELECT round((extract(EPOCH FROM endtime - starttime)/60)::numeric, 1) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id)
+                        ELSE 0
+                      END";
       }
+      else
+      {
+        $sql_field = "IF((SELECT COUNT(*) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id)>0, (SELECT ROUND(TIMESTAMPDIFF(SECOND,starttime,endtime)/60.0,1) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id),0)";
+      }
+    }
     break;
 
     case 'updateerrors':
