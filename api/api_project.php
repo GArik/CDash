@@ -107,7 +107,7 @@ class ProjectAPI extends CDashAPI
     $Project->Id = $projectid;
     $files = $Project->GetUploadedFilesOrUrls();
 
-    if(!$files)
+    if($files === false)
       {
       return array('status'=>false, 'message'=>'Error in Project::GetUploadedFilesOrUrls');
       }
