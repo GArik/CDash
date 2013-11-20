@@ -115,8 +115,6 @@ class ClientSite
     }
 
   /** Return a list of compiler ids */
-  // commenting out until it's actually used
-  /*
   function GetCompilerIds()
     {
     if(!$this->Id)
@@ -133,7 +131,6 @@ class ClientSite
       }
     return $ids;
     }
-  */
 
   /** get name*/
   function GetCompilerGenerator($compilerid)
@@ -247,8 +244,6 @@ class ClientSite
   */
 
   /** Return a list of cmake ids */
-  // commenting out until it's actually used
-  /*
   function GetLibraryIds()
     {
     if(!$this->Id)
@@ -265,12 +260,16 @@ class ClientSite
       }
     return $ids;
     }
-  */
 
   /** Get the id of a site from the sitename and systemname */
-  function GetId($sitename,$systemname)
+  function GetId($sitename, $systemname = NULL)
     {
-     $query = pdo_query("SELECT id FROM client_site WHERE name='".$sitename."' AND systemname='".$systemname."'");
+    $q = "SELECT id FROM client_site WHERE name='".$sitename."'";
+    if(isset($systemname))
+      {
+      $q .= " AND systemname='".$systemname."'";
+      }
+    $query = pdo_query($q);
     if(!$query)
       {
       add_last_sql_error("clientSite::GetId()");

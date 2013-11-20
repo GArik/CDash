@@ -27,6 +27,7 @@ require_once("cdash/pdo.php");
 // Add other api includes here
 require("api_coverage.php");
 require("api_project.php");
+require("api_site.php");
 require("api_build.php");
 require("api_user.php");
 require("api_repository.php");
