@@ -30,6 +30,8 @@ class ProjectAPI extends CDashAPI
   private function ListProjects()
     {
     include_once('../cdash/common.php');
+
+    $projects = array();
     $query = pdo_query("SELECT id,name FROM project WHERE public=1 ORDER BY name ASC");
     while($query_array = pdo_fetch_array($query))
       {
@@ -37,8 +39,64 @@ class ProjectAPI extends CDashAPI
       $project['name'] = $query_array['name'];
       $projects[] = $project;
       }
-    return $projects;
+    return array('status'=>true, 'projects'=>$projects);
     } // end function ListProjects
+
+  /**
+   * Get projects description
+   * @param project the list of project names
+   * @param pid the list of project ids
+   */
+  private function DescribeProjects()
+    {
+    include_once('../cdash/common.php');
+    include_once('../models/project.php');
+
+    if(!isset($this->Parameters['project']) && !isset($this->Parameters['pid']))
+      {
+      return array('status'=>false, 'message'=>'You must specify a project or pid parameter.');
+      }
+    if(isset($this->Parameters['project']) && isset($this->Parameters['pid']))
+      {
+      return array('status'=>false, 'message'=>'Only one of the project and pid parameter can be specified.');
+      }
+
+    $ids = array();
+    if(isset($this->Parameters['project']))
+      {
+      $projects = explode(';', $this->Parameters['project']);
+      foreach($projects as $p)
+        {
+        $projectid = get_project_id($p);
+        if(!is_numeric($projectid) || $projectid <= 0)
+          {
+          return array('status'=>false, 'message'=>"Project '$p' not found.");
+          }
+        $ids[] = $projectid;
+        }
+      }
+    else
+      {
+      $ids = explode(';', $this->Parameters['pid']);
+      }
+
+    $projects = array();
+    foreach($ids as $id)
+      {
+      $Project = new Project();
+      $Project->Id = $id;
+      $Project->Fill();
+
+      $projects[] = array('id' => $id,
+                          'name' => $Project->Name,
+                          'description' => $Project->Description,
+                          'home_url' => $Project->HomeUrl,
+                          'vcs_url' => $Project->CvsUrl,
+                          'bug_url' => $Project->BugTrackerUrl,
+                          'doc_url' => $Project->DocumentationUrl);
+      }
+    return array('status' => true, 'projects' => $projects);
+    } // end function DescribeProjects
 
   /**
    * Authenticate to the web API as a project admin
@@ -143,6 +201,7 @@ class ProjectAPI extends CDashAPI
     switch($this->Parameters['task'])
       {
       case 'list': return $this->ListProjects();
+      case 'describe': return $this->DescribeProjects();
       case 'login': return $this->Authenticate();
       case 'files': return $this->ListFiles();
       default: return array('status'=>false, 'message'=>'Unknown task: '.$this->Parameters['task']);
