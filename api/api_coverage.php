@@ -113,9 +113,14 @@ class CoverageAPI extends CDashAPI
   /** Run function */
   function Run()
     {
+    if(!isset($this->Parameters['task']))
+      {
+      return array('status'=>false, 'message'=>'Task should be set: task=...');
+      }
     switch($this->Parameters['task'])
       {
       case 'directory': return $this->CoveragePerDirectory();
+      default: return array('status'=>false, 'message'=>'Unknown task: '.$this->Parameters['task']);
       }
     } 
 }

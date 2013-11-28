@@ -593,6 +593,10 @@ class BuildAPI extends CDashAPI
   /** Run function */
   function Run()
     {
+    if(!isset($this->Parameters['task']))
+      {
+      return array('status'=>false, 'message'=>'Task should be set: task=...');
+      }
     switch($this->Parameters['task'])
       {
       case 'defects': return $this->ListDefects();
@@ -601,6 +605,7 @@ class BuildAPI extends CDashAPI
       case 'sitetestfailures': return $this->ListSiteTestFailure();
       case 'schedule': return $this->ScheduleBuild();
       case 'schedulestatus': return $this->ScheduleStatus();
+      default: return array('status'=>false, 'message'=>'Unknown task: '.$this->Parameters['task']);
       }
     }
 }

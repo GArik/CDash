@@ -136,11 +136,16 @@ class ProjectAPI extends CDashAPI
   /** Run function */
   function Run()
     {
+    if(!isset($this->Parameters['task']))
+      {
+      return array('status'=>false, 'message'=>'Task should be set: task=...');
+      }
     switch($this->Parameters['task'])
       {
       case 'list': return $this->ListProjects();
       case 'login': return $this->Authenticate();
       case 'files': return $this->ListFiles();
+      default: return array('status'=>false, 'message'=>'Unknown task: '.$this->Parameters['task']);
       }
     }
 }
