@@ -24,7 +24,7 @@ set_include_path($cdashpath . PATH_SEPARATOR . get_include_path());
 
 include_once('api.php');
 
-class CoverageAPI extends CDashAPI
+class CoverageAPI extends WebAPI
 {
   /** Return the coverage per directory with the number of lines
     * covered and not covered */

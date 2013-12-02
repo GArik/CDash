@@ -23,7 +23,7 @@ set_include_path($cdashpath . PATH_SEPARATOR . get_include_path());
 
 include_once('api.php');
 
-class SiteAPI extends CDashAPI
+class SiteAPI extends WebAPI
 {
   /** Return the list of all client sites */
   function ListSites()

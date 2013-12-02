@@ -24,7 +24,7 @@ set_include_path($cdashpath . PATH_SEPARATOR . get_include_path());
 
 include_once('api.php');
 
-class UserAPI extends CDashAPI
+class UserAPI extends WebAPI
 {
   /** List Defects */
   private function ListDefects()

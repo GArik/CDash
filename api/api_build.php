@@ -24,7 +24,7 @@ set_include_path($cdashpath . PATH_SEPARATOR . get_include_path());
 
 include_once('api.php');
 
-class BuildAPI extends CDashAPI
+class BuildAPI extends WebAPI
 {
 
   /** Return the defects: builderrors, buildwarnings, testnotrun, testfailed. */

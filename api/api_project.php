@@ -24,7 +24,7 @@ set_include_path($cdashpath . PATH_SEPARATOR . get_include_path());
 
 include_once('api.php');
 
-class ProjectAPI extends CDashAPI
+class ProjectAPI extends WebAPI
 {
   /** Return the list of all public projects */
   private function ListProjects()

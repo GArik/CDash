@@ -24,29 +24,26 @@ set_include_path($cdashpath . PATH_SEPARATOR . get_include_path());
 
 include_once('api.php');
 
-class RepositoryAPI extends WebAPI
+class CDashAPI extends WebAPI
 {
-  /** return the example URL  */
-  private function ExampleURL()
+  /** Return version of CDash */
+  private function ShowVersion()
     {
-    include_once('../cdash/common.php');
-    include_once('../cdash/repository.php');
+    require_once("../cdash/version.php");
 
-    if(!isset($this->Parameters['url']))
-      {
-      echo "url parameter not set";
-      return;
-      }
-    if(!isset($this->Parameters['type']))
-      {
-      echo "type parameter not set";
-      return;
-      }
+    return array('status'=>true, 'version'=>$CDASH_VERSION);
+    } // end function ShowVersion
 
-    $url = $this->Parameters['url'];
-    $functionname = 'get_'.strtolower($this->Parameters['type']).'_diff_url';
-    return $functionname($url, 'DIRECTORYNAME', 'FILENAME', 'REVISION');
-    }
+  private function ShowSettings()
+    {
+    include("../cdash/config.php");
+
+    return array('status'=>true,
+                 'email_admin'=>$CDASH_EMAILADMIN,
+                 'active_project_days'=>$CDASH_ACTIVE_PROJECT_DAYS,
+                 'manage_clients'=>$CDASH_MANAGE_CLIENTS,
+                 'large_text_limit'=>$CDASH_LARGE_TEXT_LIMIT);
+    } // end function ShowSettings
 
   /** Run function */
   function Run()
@@ -57,7 +54,8 @@ class RepositoryAPI extends WebAPI
       }
     switch($this->Parameters['task'])
       {
-      case 'exampleurl': return $this->ExampleURL();
+      case 'version': return $this->ShowVersion();
+      case 'settings': return $this->ShowSettings();
       default: return array('status'=>false, 'message'=>'Unknown task: '.$this->Parameters['task']);
       }
     }
