@@ -323,14 +323,14 @@ class IndexPhpFilters extends DefaultFilters
       if($CDASH_DB_TYPE == "pgsql")
       {
         $sql_field = "CASE
-                        WHEN (SELECT count(*) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id) > 0
-                          THEN (SELECT round((extract(EPOCH FROM endtime - starttime)/60)::numeric, 1) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id)
+                        WHEN (SELECT count(*) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.id AND b2u.buildid=b.id) > 0
+                          THEN (SELECT round((extract(EPOCH FROM endtime - starttime)/60)::numeric, 1) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.id AND b2u.buildid=b.id)
                         ELSE 0
                       END";
       }
       else
       {
-        $sql_field = "IF((SELECT COUNT(*) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id)>0, (SELECT ROUND(TIMESTAMPDIFF(SECOND,starttime,endtime)/60.0,1) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.updateid AND b2u.buildid=b.id),0)";
+        $sql_field = "IF((SELECT COUNT(*) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.id AND b2u.buildid=b.id)>0, (SELECT ROUND(TIMESTAMPDIFF(SECOND,starttime,endtime)/60.0,1) FROM buildupdate AS u, build2update AS b2u WHERE b2u.updateid=u.id AND b2u.buildid=b.id),0)";
       }
     }
     break;
