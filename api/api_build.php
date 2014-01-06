@@ -141,6 +141,105 @@ class BuildAPI extends WebAPI
     return array('status'=>true, 'builds'=>$builds);
     } // end function ListBuilds
 
+  /**
+   * Get build description
+   * @param bid the list of build ids
+   */
+  private function DescribeBuilds()
+    {
+    include_once('../cdash/common.php');
+
+    if(!isset($this->Parameters['bid']))
+      {
+      return array('status'=>false, 'message'=>'You must specify the bid parameter.');
+      }
+    $ids = explode(';', $this->Parameters['bid']);
+    /*$id = $this->Parameters['bid'];
+    if(!is_numeric($id) || $id <= 0)
+      {
+      return array('status'=>false, 'message'=>'Incorrect id.');
+      }*/
+
+    $builds = array();
+    $q = "SELECT bu.nfiles,
+                 bu.starttime AS updatestarttime,
+                 bu.endtime AS updateendtime,
+                 c.starttime AS configurestarttime,
+                 c.endtime AS configureendtime,
+                 btt.time AS testsduration,
+                 b.id, b.name, b.type,
+                 b.starttime, b.endtime, b.submittime,
+                 b.builderrors AS countbuilderrors,
+                 b.buildwarnings AS countbuildwarnings,
+                 b.testnotrun AS counttestsnotrun,
+                 b.testfailed AS counttestsfailed,
+                 b.testpassed AS counttestspassed,
+                 cov.loctested, cov.locuntested,
+                 s.name AS sitename,
+                 p.name AS projectname
+                 FROM site AS s, project AS p, build AS b
+                   LEFT JOIN build2update AS b2u ON (b2u.buildid=b.id)
+                   LEFT JOIN buildupdate AS bu ON (b2u.updateid=bu.id)
+                   LEFT JOIN configure AS c ON (c.buildid=b.id)
+                   LEFT JOIN buildtesttime AS btt ON (btt.buildid=b.id)
+                   LEFT JOIN coveragesummary AS cov ON (cov.buildid=b.id)
+                 WHERE s.id = b.siteid AND p.id = b.projectid
+                   AND (b.id = ".str_replace(';', " OR b.id = ", $this->Parameters['bid']).")
+                   ORDER BY id";
+    $query = pdo_query($q);
+    while($query_array = pdo_fetch_array($query))
+      {
+      $id = $query_array['id'];
+      $name = $query_array['name'];
+      $type = $query_array['type'];
+      $site = $query_array['sitename'];
+      $project = $query_array['projectname'];
+
+      $n_upd_files = 0;
+      if(!empty($query_array['nfiles']))
+        {
+        $n_upd_files = $query_array['nfiles'];
+        }
+
+      $submittime = strtotime($query_array['submittime']);
+      $cfg_duration = round((strtotime($query_array['configureendtime'])-strtotime($query_array['configurestarttime']))/60,1);
+      $build_duration = round((strtotime($query_array['endtime'])-strtotime($query_array['starttime']))/60,1);
+      $test_duration = !empty($query_array['testsduration']) ? round($query_array['testsduration'], 1) : 0.0; // already in minutes
+
+      $n_warnings = $query_array['countbuildwarnings'] > 0 ? $query_array['countbuildwarnings'] : 0;
+      $n_errors = $query_array['countbuilderrors'] > 0 ? $query_array['countbuilderrors'] : 0;
+
+      $n_test_pass = $query_array['counttestspassed'] > 0 ? $query_array['counttestspassed'] : 0;
+      $n_test_fail = $query_array['counttestsfailed'] > 0 ? $query_array['counttestsfailed'] : 0;
+      $n_test_not_run = $query_array['counttestsnotrun'] > 0 ? $query_array['counttestsnotrun'] : 0;
+
+      $n_loc_covered = $query_array['loctested'] > 0 ? $query_array['loctested'] : 0;
+      $n_loc_uncovered = $query_array['locuntested'] > 0 ? $query_array['locuntested'] : 0;
+
+      $builds[] = array('id' => $id,
+                        'name' => $name,
+                        'site' => $site,
+                        'project' => $project,
+                        'type' => $type,
+                        'year' => date("Y", $submittime),
+                        'month' => date("n", $submittime),
+                        'day' => date("j", $submittime),
+                        'time' => date("H:i:s", $submittime),
+                        'n_upd_files' => $n_upd_files,
+                        'cfg_duration' => $cfg_duration,
+                        'build_duration' => $build_duration,
+                        'test_duration' => $test_duration,
+                        'n_warnings' => $n_warnings,
+                        'n_errors' => $n_errors,
+                        'n_test_pass' => $n_test_pass,
+                        'n_test_fail' => $n_test_fail,
+                        'n_test_not_run' => $n_test_not_run,
+                        'n_loc_covered' => $n_loc_covered,
+                        'n_loc_uncovered' => $n_loc_uncovered);
+      }
+    return array('status' => true, 'builds' => $builds);
+    } // end function DescribeBuilds
+
   /** Return the defects: builderrors, buildwarnings, testnotrun, testfailed. */
   private function ListDefects()
     {
@@ -714,6 +813,7 @@ class BuildAPI extends WebAPI
     switch($this->Parameters['task'])
       {
       case 'list': return $this->ListBuilds();
+      case 'describe': return $this->DescribeBuilds();
       case 'defects': return $this->ListDefects();
       case 'revisionstatus': return $this->RevisionStatus();
       case 'checkinsdefects': return $this->ListCheckinsDefects();
