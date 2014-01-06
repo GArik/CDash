@@ -26,6 +26,120 @@ include_once('api.php');
 
 class BuildAPI extends WebAPI
 {
+  /** Return the list of builds
+    * @param date list of the build dates
+    * @param count limit of the build number
+    * @param project list of the project names
+    * @param pid list of project ids
+    * @param site list of the site names
+    * @param sid list of site ids
+    * @param type list of the build types (nightly, experimental, continuous) */
+  private function ListBuilds()
+    {
+    include_once('../cdash/common.php');
+
+    // FIXME: Ensure that site name and type are correct
+    $q = "SELECT build.id AS id, build.name AS name, site.name AS site,
+                 project.name AS project, build.type AS type,
+                 extract(YEAR FROM build.submittime) AS y,
+                 extract(MONTH FROM build.submittime) AS m,
+                 extract(DAY FROM build.submittime) AS d,
+                 build.submittime::time AS t
+          FROM build, site, project
+          WHERE build.siteid = site.id AND build.projectid = project.id";
+
+    if(isset($this->Parameters['type']))
+      {
+      $q .= " AND (type = '".str_replace(';', "' OR type = '", $this->Parameters['type'])."')";
+      }
+
+    if(isset($this->Parameters['project']))
+      {
+      /*$projects = explode(';', $this->Parameters['project']);
+      foreach($projects as $p)
+        {
+        $projectid = get_project_id($p);
+        if(!is_numeric($projectid) || $projectid <= 0)
+          {
+          return array('status'=>false, 'message'=>"Project '$p' not found.");
+          }
+        $ids[] = $projectid;
+        }
+      $q .= " AND (project.id = ".implode(" OR project.id = ", $ids).")";*/
+      $q .= " AND (project.name = '".str_replace(';', "' OR project.name = '", $this->Parameters['project'])."')";
+      }
+
+    if(isset($this->Parameters['pid']))
+      {
+      $q .= " AND (project.id = ".str_replace(';', " OR project.id = ", $this->Parameters['pid']).")";
+      }
+
+    if(isset($this->Parameters['site']))
+      {
+      $q .= " AND (site.name = '".str_replace(';', "' OR site.name = '", $this->Parameters['site'])."')";
+      }
+
+    if(isset($this->Parameters['sid']))
+      {
+      $q .= " AND (site.id = ".str_replace(';', " OR site.id = ", $this->Parameters['sid']).")";
+      }
+
+    if(!isset($this->Parameters['date']) && !isset($this->Parameters['count']))
+      {
+      $q .= " ORDER BY submittime DESC LIMIT 10"; // return 10 last builds by default
+      }
+    else
+      {
+      if(isset($this->Parameters['date']))
+        {
+        $q .= " AND (";
+        $dates = explode(';', $this->Parameters['date']);
+        for($i = 0; $i < count($dates); $i++)
+          {
+          $d = $dates[$i];
+          if($i > 0)
+            {
+            $q .= " OR ";
+            }
+          if(strpos($d, ',') !== false)
+            {
+            $dd = explode(',', $d);
+            if(count($dd) != 2)
+              {
+              return array('status'=>false, 'message'=>"Incorrect date interval specified: $d");
+              }
+            $q .= "('$dd[0]' <= submittime::date AND submittime::date <= '$dd[1]')";
+            }
+          else
+            {
+            $q .= "submittime::date = '$d'";
+            }
+          }
+          $q .= ")";
+        }
+      if(isset($this->Parameters['count']))
+        {
+        $q .= " ORDER BY submittime DESC LIMIT ".$this->Parameters['count'];
+        }
+      }
+
+    $builds = array();
+    $query = pdo_query($q);
+    while($query_array = pdo_fetch_array($query))
+      {
+      $build['id'] = $query_array['id'];
+      $build['name'] = $query_array['name'];
+      $build['site'] = $query_array['site'];
+      $build['project'] = $query_array['project'];
+      $build['type'] = $query_array['type'];
+      $build['year'] = $query_array['y'];
+      $build['month'] = $query_array['m'];
+      $build['day'] = $query_array['d'];
+      $build['time'] = $query_array['t'];
+      $builds[] = $build;
+      }
+    return array('status'=>true, 'builds'=>$builds);
+    } // end function ListBuilds
 
   /** Return the defects: builderrors, buildwarnings, testnotrun, testfailed. */
   private function ListDefects()
@@ -599,6 +713,7 @@ class BuildAPI extends WebAPI
       }
     switch($this->Parameters['task'])
       {
+      case 'list': return $this->ListBuilds();
       case 'defects': return $this->ListDefects();
       case 'revisionstatus': return $this->RevisionStatus();
       case 'checkinsdefects': return $this->ListCheckinsDefects();
