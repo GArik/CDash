@@ -240,6 +240,119 @@ class BuildAPI extends WebAPI
     return array('status' => true, 'builds' => $builds);
     } // end function DescribeBuilds
 
+  /**
+   * Get difference between two adjacent builds
+   * @param bid the list of build ids
+   */
+  private function GetBuildsDiff()
+    {
+    include_once('../cdash/common.php');
+
+    if(!isset($this->Parameters['bid']))
+      {
+      return array('status'=>false, 'message'=>'You must specify the bid parameter.');
+      }
+    $ids = explode(';', $this->Parameters['bid']);
+    /*$id = $this->Parameters['bid'];
+    if(!is_numeric($id) || $id <= 0)
+      {
+      return array('status'=>false, 'message'=>'Incorrect id.');
+      }*/
+
+    $builds = array();
+    $q = "SELECT b.id, b.name, b.type,
+                 b.starttime, b.endtime, b.submittime,
+                 bu.nfiles,
+                 s.name AS sitename,
+                 p.name AS projectname,
+                 be.difference_positive AS builderrorsdiffpos,
+                 be.difference_negative AS builderrorsdiffneg,
+                 bw.difference_positive AS buildwarningsdiffpos,
+                 bw.difference_negative AS buildwarningsdiffneg,
+                 tp.difference_positive AS testpasseddiffpos,
+                 tp.difference_negative AS testpasseddiffneg,
+                 tf.difference_positive AS testfaileddiffpos,
+                 tf.difference_negative AS testfaileddiffneg,
+                 tnr.difference_positive AS testnotrundiffpos,
+                 tnr.difference_negative AS testnotrundiffneg,
+                 cov.loctested AS loccovereddiff,
+                 cov.locuntested AS locuncovereddiff
+             FROM build AS b CROSS JOIN project AS p CROSS JOIN site AS s
+                 LEFT JOIN build2update AS b2u ON (b2u.buildid = b.id)
+                 LEFT JOIN buildupdate AS bu ON (b2u.updateid = bu.id)
+                 LEFT JOIN (SELECT buildid, difference_positive, difference_negative FROM builderrordiff WHERE type = 0) AS be ON (b.id = be.buildid)
+                 LEFT JOIN (SELECT buildid, difference_positive, difference_negative FROM builderrordiff WHERE type = 1) AS bw ON (b.id = bw.buildid)
+                 LEFT JOIN (SELECT buildid, difference_positive, difference_negative FROM testdiff WHERE type = 2) AS tp ON (b.id = tp.buildid)
+                 LEFT JOIN (SELECT buildid, difference_positive, difference_negative FROM testdiff WHERE type = 1) AS tf ON (b.id = tf.buildid)
+                 LEFT JOIN (SELECT buildid, difference_positive, difference_negative FROM testdiff WHERE type = 0) AS tnr ON (b.id = tnr.buildid)
+                 LEFT JOIN coveragesummarydiff AS cov ON (b.id = cov.buildid)
+             WHERE s.id = b.siteid AND p.id = b.projectid
+                 AND (b.id = ".str_replace(';', " OR b.id = ", $this->Parameters['bid']).")
+             ORDER BY id";
+    $query = pdo_query($q);
+    while($query_array = pdo_fetch_array($query))
+      {
+      $id = $query_array['id'];
+      $name = $query_array['name'];
+      $type = $query_array['type'];
+      $site = $query_array['sitename'];
+      $project = $query_array['projectname'];
+
+      $n_upd_files = 0;
+      if(!empty($query_array['nfiles']))
+        {
+        $n_upd_files = $query_array['nfiles'];
+        }
+
+      $submittime = strtotime($query_array['submittime']);
+      /*$cfg_duration = round((strtotime($query_array['configureendtime'])-strtotime($query_array['configurestarttime']))/60,1);
+      $build_duration = round((strtotime($query_array['endtime'])-strtotime($query_array['starttime']))/60,1);
+      $test_duration = !empty($query_array['testsduration']) ? strtotime($query_array['testsduration']) : 0.0;*/
+
+      $diff_warnings_pos = $query_array['buildwarningsdiffpos'] > 0 ? $query_array['buildwarningsdiffpos'] : 0;
+      $diff_warnings_neg = $query_array['buildwarningsdiffneg'] > 0 ? $query_array['buildwarningsdiffneg'] : 0;
+      $diff_errors_pos = $query_array['builderrorsdiffpos'] > 0 ? $query_array['builderrorsdiffpos'] : 0;
+      $diff_errors_neg = $query_array['builderrorsdiffneg'] > 0 ? $query_array['builderrorsdiffneg'] : 0;
+
+      $diff_n_test_pass_pos = $query_array['testpasseddiffpos'] > 0 ? $query_array['testpasseddiffpos'] : 0;
+      $diff_n_test_pass_neg = $query_array['testpasseddiffneg'] > 0 ? $query_array['testpasseddiffneg'] : 0;
+      $diff_n_test_fail_pos = $query_array['testfaileddiffpos'] > 0 ? $query_array['testfaileddiffpos'] : 0;
+      $diff_n_test_fail_neg = $query_array['testfaileddiffneg'] > 0 ? $query_array['testfaileddiffneg'] : 0;
+      $diff_n_test_not_run_pos = $query_array['testnotrundiffpos'] > 0 ? $query_array['testnotrundiffpos'] : 0;
+      $diff_n_test_not_run_neg = $query_array['testnotrundiffneg'] > 0 ? $query_array['testnotrundiffneg'] : 0;
+
+      $diff_n_loc_covered = $query_array['loccovereddiff'] > 0 ? $query_array['loccovereddiff'] : 0;
+      $diff_n_loc_uncovered = $query_array['locuncovereddiff'] > 0 ? $query_array['locuncovereddiff'] : 0;
+
+      $builds[] = array('id' => $id,
+                        'name' => $name,
+                        'site' => $site,
+                        'project' => $project,
+                        'type' => $type,
+                        'year' => date("Y", $submittime),
+                        'month' => date("n", $submittime),
+                        'day' => date("j", $submittime),
+                        'time' => date("H:i:s", $submittime),
+                        'n_upd_files' => $n_upd_files,
+                        /*'cfg_duration' => $cfg_duration,
+                        'build_duration' => $build_duration,
+                        'test_duration' => $test_duration,*/
+                        'diff_warnings_pos' => $diff_warnings_pos,
+                        'diff_warnings_neg' => $diff_warnings_neg,
+                        'diff_errors_pos' => $diff_errors_pos,
+                        'diff_errors_neg' => $diff_errors_neg,
+                        'diff_n_test_pass_pos' => $diff_n_test_pass_pos,
+                        'diff_n_test_pass_neg' => $diff_n_test_pass_neg,
+                        'diff_n_test_fail_pos' => $diff_n_test_fail_pos,
+                        'diff_n_test_fail_neg' => $diff_n_test_fail_neg,
+                        'diff_n_test_not_run_pos' => $diff_n_test_not_run_pos,
+                        'diff_n_test_not_run_neg' => $diff_n_test_not_run_neg,
+                        'diff_n_loc_covered' => $diff_n_loc_covered,
+                        'diff_n_loc_uncovered' => $diff_n_loc_uncovered);
+      }
+    return array('status' => true, 'builds' => $builds);
+    } // end function GetBuildsDiff
+
   /** Return the defects: builderrors, buildwarnings, testnotrun, testfailed. */
   private function ListDefects()
     {
@@ -814,6 +927,7 @@ class BuildAPI extends WebAPI
       {
       case 'list': return $this->ListBuilds();
       case 'describe': return $this->DescribeBuilds();
+      case 'diff': return $this->GetBuildsDiff();
       case 'defects': return $this->ListDefects();
       case 'revisionstatus': return $this->RevisionStatus();
       case 'checkinsdefects': return $this->ListCheckinsDefects();
