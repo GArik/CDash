@@ -353,6 +353,44 @@ class BuildAPI extends WebAPI
     return array('status' => true, 'builds' => $builds);
     } // end function GetBuildsDiff
 
+  /**
+   * Get description of tests for the specified build
+   * @param bid the list of build ids
+   * @param status test status (passed, failed, not run)
+   */
+  private function ListBuildTests()
+    {
+    include_once('../cdash/common.php');
+
+    if(!isset($this->Parameters['bid']))
+      {
+      return array('status'=>false, 'message'=>'You must specify the bid parameter.');
+      }
+    $ids = explode(';', $this->Parameters['bid']);
+
+    $builds = array();
+    $q = "SELECT t.name, b2t.status, b2t.time
+          FROM build2test AS b2t INNER JOIN test AS t ON (b2t.testid = t.id)
+          WHERE (b2t.buildid = ".str_replace(';', " OR b2t.buildid = ", $this->Parameters['bid']).")";
+    if(isset($this->Parameters['status']))
+      {
+      $q .= " AND (b2t.status = '".str_replace(';', "' OR b2t.status = '", $this->Parameters['status'])."')";
+      }
+    $q .= " ORDER BY id";
+    $query = pdo_query($q);
+    while($query_array = pdo_fetch_array($query))
+      {
+      $name = $query_array['name'];
+      $status = $query_array['status'];
+      $time = round($query_array['time'], 2);
+
+      $tests[] = array('name' => $name,
+                       'status' => $status,
+                       'time' => $time);
+      }
+    return array('status' => true, 'tests' => $tests);
+    } // end function ListBuildTests
+
   /** Return the defects: builderrors, buildwarnings, testnotrun, testfailed. */
   private function ListDefects()
     {
@@ -928,6 +966,7 @@ class BuildAPI extends WebAPI
       case 'list': return $this->ListBuilds();
       case 'describe': return $this->DescribeBuilds();
       case 'diff': return $this->GetBuildsDiff();
+      case 'tests': return $this->ListBuildTests();
       case 'defects': return $this->ListDefects();
       case 'revisionstatus': return $this->RevisionStatus();
       case 'checkinsdefects': return $this->ListCheckinsDefects();
