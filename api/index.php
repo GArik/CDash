@@ -31,6 +31,7 @@ require("api_site.php");
 require("api_build.php");
 require("api_user.php");
 require("api_repository.php");
+require("api_schedule.php");
 require("api_cdash.php");
 
 if(!isset($_GET['method']))
