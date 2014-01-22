@@ -101,16 +101,29 @@ class ProjectAPI extends WebAPI
   /**
    * Authenticate to the web API as a project admin
    * @param project the name of the project
+   * @param pid the project id
    * @param key the web API key for that project
    */
   function Authenticate()
     {
     include_once('../cdash/common.php');
-    if(!isset($this->Parameters['project']))
+    if(!isset($this->Parameters['project']) && !isset($this->Parameters['pid']))
       {
-      return array('status'=>false, 'message'=>"You must specify a project parameter.");
+      return array('status'=>false, 'message'=>'You must specify a project or pid parameter.');
       }
-    $projectid = get_project_id($this->Parameters['project']);
+    if(isset($this->Parameters['project']) && isset($this->Parameters['pid']))
+      {
+      return array('status'=>false, 'message'=>'Only one of the project and pid parameter can be specified.');
+      }
+
+    if(isset($this->Parameters['project']))
+      {
+      $projectid = get_project_id($this->Parameters['project']);
+      }
+    else
+      {
+      $projectid = $this->Parameters['pid'];
+      }
     if(!is_numeric($projectid) || $projectid <= 0)
       {
       return array('status'=>false, 'message'=>'Project not found.');
@@ -124,7 +137,7 @@ class ProjectAPI extends WebAPI
     $query = pdo_query("SELECT webapikey FROM project WHERE id=$projectid");
     if(pdo_num_rows($query) == 0)
       {
-      return array('status'=>false, 'message'=>"Invalid projectid.");
+      return array('status'=>false, 'message'=>"Invalid project id.");
       }
     $row = pdo_fetch_array($query);
     $realKey = $row['webapikey'];
