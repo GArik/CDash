@@ -26,16 +26,50 @@ include_once('api.php');
 
 class ScheduleAPI extends WebAPI
 {
-  /** Schedule a build */
+  /** Get the user id from the user name */
+  private function get_user_id($username)
+  {
+    require_once("cdash/common.php");
+    require_once("cdash/pdo.php");
+
+    $username = pdo_real_escape_string($username);
+    $userid = pdo_get_field_value("SELECT id FROM ".qid("user")." WHERE email='$username'", 'id', '-1');
+    return $userid;
+  }
+
+  /** Schedule a build
+    * @param token the token obtained from the project API's login method. Pass as a POST parameter for security
+    * @param project name of the project
+    * @param pid id of the project
+    * @param user user scheduling the build (default is administrator)
+    * @param userid id of the user scheduling the build
+    * @param type experimental, nighty, continuous (Experimental=0,Nightly=1,Continuous=2)
+    * @param repository name of the repository
+    * @param branch name of the repository branch
+    * @param tag name of the repository tag
+    * @param suffix suffix for the build
+    * @param configuration configuration type for compilation (Debug=0,Release=1,RelWithDebInfo=2,MinSizeRel=3)
+    * @param cmakeversion version of CMake to use
+    * @param site specify that the build should run on one of the specified sites
+    * @param sid specify that the build should run on one of the specified sites
+    * @param osname name of the OS to run the build
+    * @param osversion version of the OS to run the build
+    * @param osbits number of bits of the target OS
+    * @param compiler list of allowed target compilers (e.g. 'clang-3.2;clang-3.3;gcc')
+    * @param library list of required libraries (e.g. 'qt-4.8;qca')
+    * @param program list of program names (e.g. 'python')
+    */
   private function ScheduleBuild()
     {
     include("../cdash/config.php");
     include_once('../cdash/common.php');
     include_once("../models/clientjobschedule.php");
     include_once("../models/clientos.php");
+    include_once('../models/clientsite.php');
     include_once("../models/clientcmake.php");
     include_once("../models/clientcompiler.php");
     include_once("../models/clientlibrary.php");
+    include_once("../models/project.php");
 
     if(!isset($this->Parameters['token']))
       {
@@ -43,20 +77,31 @@ class ScheduleAPI extends WebAPI
       }
 
     $clientJobSchedule = new ClientJobSchedule();
+    $project = new Project();
 
-    $status = array();
-    $status['scheduled'] = 0;
-    if(!isset($this->Parameters['project']))
+    if(!isset($this->Parameters['project']) && !isset($this->Parameters['pid']))
       {
-      return array('status'=>false, 'message'=>'You must specify a project parameter.');
+      return array('status'=>false, 'message'=>'You must specify a project or pid parameter.');
+      }
+    if(isset($this->Parameters['project']) && isset($this->Parameters['pid']))
+      {
+      return array('status'=>false, 'message'=>'Only one of the project and pid parameter can be specified.');
       }
 
-    $projectid = get_project_id($this->Parameters['project']);
-    if(!is_numeric($projectid) || $projectid<=0)
+    if(isset($this->Parameters['project']))
+      {
+      $projectid = get_project_id($this->Parameters['project']);
+      }
+    else
+      {
+      $projectid = $this->Parameters['pid'];
+      }
+    if(!is_numeric($projectid) || $projectid <= 0)
       {
       return array('status'=>false, 'message'=>'Project not found.');
       }
     $clientJobSchedule->ProjectId = $projectid;
+    $project->Id = $projectid;
 
     // Perform the authentication (make sure user has project admin priviledges)
     if(!web_api_authenticate($projectid, $this->Parameters['token']))
@@ -65,11 +110,26 @@ class ScheduleAPI extends WebAPI
       }
 
     // We would need a user login/password at some point
-    $clientJobSchedule->UserId = '1';
+    if(isset($this->Parameters['user']) && isset($this->Parameters['userid']))
+      {
+      return array('status'=>false, 'message'=>'Only one of the user and userid parameter can be specified.');
+      }
+
+    $userid = 1;
+    if(isset($this->Parameters['user']))
+      {
+      $userid = $this->get_user_id($this->Parameters['user']);
+      }
     if(isset($this->Parameters['userid']))
       {
-      $clientJobSchedule->UserId = pdo_real_escape_string($this->Parameters['userid']);
+      $userid = $this->Parameters['userid'];
       }
+    if(!is_numeric($userid) || $userid <= 0)
+      {
+      return array('status'=>false, 'message'=>'User not found.');
+      }
+
+    $clientJobSchedule->UserId = $userid;
 
     // Experimental: 0
     // Nightly: 1
@@ -80,16 +140,23 @@ class ScheduleAPI extends WebAPI
       $clientJobSchedule->Type = pdo_real_escape_string($this->Parameters['type']);
       }
 
-    if(!isset($this->Parameters['repository']))
+    if(isset($this->Parameters['repository']))
       {
-      return array('status'=>false, 'message'=>'You must specify a repository parameter.');
+      $clientJobSchedule->Repository = pdo_real_escape_string($this->Parameters['repository']);
+      }
+    else
+      {
+      $repositories = $project->GetRepositories();
+      if(count($repositories) < 1)
+        {
+        return array('status'=>false, 'message'=>'You must specify a repository parameter.');
+        }
+      $clientJobSchedule->Repository = $repositories[0]['url'];
       }
 
-    $clientJobSchedule->Repository = pdo_real_escape_string($this->Parameters['repository']);
-
-    if(isset($this->Parameters['module']))
+    if(isset($this->Parameters['branch']))
       {
-      $clientJobSchedule->Module = pdo_real_escape_string($this->Parameters['module']);
+      $clientJobSchedule->Module = pdo_real_escape_string($this->Parameters['branch']);
       }
 
     if(isset($this->Parameters['tag']))
@@ -136,11 +203,38 @@ class ScheduleAPI extends WebAPI
         }
       }
 
-    // Set the site id (for now only one)
-    if(isset($this->Parameters['siteid']))
+    // Set the site ids
+    if(isset($this->Parameters['site']) && isset($this->Parameters['sid']))
       {
-      $siteid = pdo_real_escape_string($this->Parameters['siteid']);
-      $clientJobSchedule->AddSite($siteid);
+      return array('status'=>false, 'message'=>'Only one of the site and sid parameter can be specified.');
+      }
+
+    if(isset($this->Parameters['site']) || isset($this->Parameters['sid']))
+      {
+      $siteids = array();
+      if(isset($this->Parameters['site']))
+        {
+        $Site = new ClientSite();
+        $sites = explode(';', $this->Parameters['site']);
+        foreach($sites as $s)
+          {
+          $siteid = $Site->GetId($s);
+          if(!is_numeric($siteid) || $siteid <= 0)
+            {
+            return array('status'=>false, 'message'=>"Site '$s' not found.");
+            }
+          $siteids[] = $siteid;
+          }
+        }
+      else
+        {
+        $siteids = explode(';', $this->Parameters['sid']);
+        }
+
+      foreach($siteids as $siteid)
+        {
+        $clientJobSchedule->AddSite($siteid);
+        }
       }
 
     if(isset($this->Parameters['osname'])
@@ -163,40 +257,43 @@ class ScheduleAPI extends WebAPI
         }
       }
 
-     if(isset($this->Parameters['compilername'])
-       || isset($this->Parameters['compilerversion']))
+     if(isset($this->Parameters['compiler']))
        {
-       $ClientCompiler  = new ClientCompiler();
-       $compilername = '';
-       $compilerversion = '';
-       if(isset($this->Parameters['compilername'])) {$compilername = $this->Parameters['compilername'];}
-       if(isset($this->Parameters['compilerversion'])) {$compilerversion = $this->Parameters['compilerversion'];}
-       $compilerids = $ClientCompiler->GetCompiler($compilername,$compilerversion);
-       foreach($compilerids as $compilerid)
+       $compilers = explode(';', $this->Parameters['compiler']);
+       $ClientCompiler = new ClientCompiler();
+       foreach($compilers as $compiler)
          {
-         $clientJobSchedule->AddCompiler($compilerid);
+         $c = explode('-', $compiler);
+         $compilername = $c[0];
+         $compilerversion = count($c) > 1 ? $c[1] : ''; // FIXME: what if count($c) > 2
+         $compilerids = $ClientCompiler->GetCompiler($compilername,$compilerversion);
+         foreach($compilerids as $compilerid)
+           {
+           $clientJobSchedule->AddCompiler($compilerid);
+           }
          }
        }
 
-    if(isset($this->Parameters['libraryname'])
-       || isset($this->Parameters['libraryversion']))
+    if(isset($this->Parameters['library']))
        {
-       $ClientLibrary  = new ClientLibrary();
-       $libraryname = '';
-       $libraryversion = '';
-       if(isset($this->Parameters['libraryname'])) {$libraryname = $this->Parameters['libraryname'];}
-       if(isset($this->Parameters['libraryversion'])) {$libraryversion = $this->Parameters['libraryversion'];}
-       $libraryids = $ClientLibrary->GetLibrary($libraryname,$libraryversion);
-       foreach($libraryids as $libraryid)
+       $libraries = explode(';', $this->Parameters['library']);
+       $ClientLibrary = new ClientLibrary();
+       foreach($libraries as $library)
          {
-         $clientJobSchedule->AddLibrary($libraryid);
+         $l = explode('-', $library);
+         $libraryname = $l[0];
+         $libraryversion = count($l) > 1 ? $l[1] : ''; // FIXME
+         $libraryids = $ClientLibrary->GetLibrary($libraryname,$libraryversion);
+         foreach($libraryids as $libraryid)
+           {
+           $clientJobSchedule->AddLibrary($libraryid);
+           }
          }
        }
 
-    $status['scheduleid'] = $clientJobSchedule->Id;
-    $status['scheduled'] = 1;
-    $status['status'] = true;
-    return $status;
+    // TODO: Handle $this->Parameters['program']
+
+    return array('status'=>true, 'id'=>$clientJobSchedule->Id);
     } // end function ScheduleBuild
 
    /** Return the status of a scheduled build */
@@ -266,8 +363,8 @@ class ScheduleAPI extends WebAPI
       }
     switch($this->Parameters['task'])
       {
-      case 'schedule': return $this->ScheduleBuild();
-      case 'schedulestatus': return $this->ScheduleStatus();
+      case 'add': return $this->ScheduleBuild();
+      case 'status': return $this->ScheduleStatus();
       default: return array('status'=>false, 'message'=>'Unknown task: '.$this->Parameters['task']);
       }
     }

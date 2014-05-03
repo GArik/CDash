@@ -484,6 +484,20 @@ class ClientJobSchedule
     return $compilerids;
     }
 
+  /** Get the site */
+  function GetSite()
+    {
+    if(!$this->Id)
+      {
+      add_log("ClientJobSchedule::GetSite","Id not set");
+      return;
+      }
+
+    $query = pdo_query("SELECT client_site.name FROM client_site INNER JOIN client_job ON client_site.id = client_job.siteid WHERE scheduleid=".qnum($this->Id));
+    $row = pdo_fetch_array($query);
+    return $row[0];
+    }
+
   /** Get the sites */
   function GetSites()
     {
