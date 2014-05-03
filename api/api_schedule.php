@@ -296,6 +296,149 @@ class ScheduleAPI extends WebAPI
     return array('status'=>true, 'id'=>$clientJobSchedule->Id);
     } // end function ScheduleBuild
 
+  /** Return the list of schedules
+    * @param date list of the build dates
+    * @param count limit of the build number
+    * @param project list of the project names
+    * @param pid list of project ids
+    * @param site list of the site names
+    * @param sid list of site ids
+    * @param type list of the build types (nightly, experimental, continuous)
+    * @param status list of schedule statuses (scheduled, running, finished, aborted, failed)
+    */
+  private function ListSchedules()
+    {
+    include_once('../cdash/common.php');
+    include_once('../models/constants.php');
+
+    $q = "SELECT js.lastrun, js.id, j.status, js.startdate, p.name
+          FROM client_jobschedule AS js
+            LEFT JOIN client_job AS j ON (j.scheduleid=js.id)
+            LEFT JOIN project AS p ON (p.id=js.projectid)
+            LEFT JOIN client_site AS s ON (s.id=j.siteid)
+          WHERE TRUE ";
+
+    if(isset($this->Parameters['project']))
+      {
+      $q .= " AND (p.name = '".str_replace(';', "' OR p.name = '", $this->Parameters['project'])."')";
+      }
+
+    if(isset($this->Parameters['pid']))
+      {
+      $q .= " AND (p.id = ".str_replace(';', " OR p.id = ", $this->Parameters['pid']).")";
+      }
+
+    if(isset($this->Parameters['site']))
+      {
+      $q .= " AND (s.name = '".str_replace(';', "' OR s.name = '", $this->Parameters['site'])."')";
+      }
+
+    if(isset($this->Parameters['sid']))
+      {
+      $q .= " AND (s.id = ".str_replace(';', " OR s.id = ", $this->Parameters['sid']).")";
+      }
+
+    if(isset($this->Parameters['type']))
+      {
+      $q .= " AND (";
+      $first = true;
+      $buildtypes = explode(';', $this->Parameters['type']);
+      foreach($buildtypes AS $t)
+        {
+        switch($t)
+          {
+          case "Experimental": $buildtype = CDASH_JOB_EXPERIMENTAL; break;
+          case "Nightly": $buildtype = CDASH_JOB_NIGHTLY; break;
+          case "Continuous": $buildtype = CDASH_JOB_CONTINUOUS; break;
+          default: return array('status'=>false, 'message'=>"Unknown build type: '$t'.");
+          }
+        if($first === false) $q .= " OR ";
+        $q .= "js.type = '$buildtype'";
+        $first = false;
+        }
+      $q .= ")";
+      }
+
+    if(isset($this->Parameters['status']))
+      {
+      $s = $this->Parameters['status'];
+      switch($s)
+        {
+        case "scheduled": $status = CDASH_JOB_SCHEDULED; break;
+        case "running": $status = CDASH_JOB_RUNNING; break;
+        case "finished": $status = CDASH_JOB_FINISHED; break;
+        case "aborted": $status = CDASH_JOB_ABORTED; break;
+        case "failed": $status = CDASH_JOB_FAILED; break;
+        default: return array('status'=>false, 'message'=>"Unknown schedule status: '$s'.");
+        }
+      $q .= " AND (j.status = $status";
+      if($s == "scheduled")
+        {
+        $q .= " OR j.status IS NULL";
+        }
+      $q .= ")";
+      }
+
+    if(!isset($this->Parameters['date']) && !isset($this->Parameters['count']))
+      {
+      $q .= " ORDER BY js.startdate DESC LIMIT 10"; // return 10 last schedules by default
+      }
+    else
+      {
+      if(isset($this->Parameters['date']))
+        {
+        $q .= " AND (";
+        $dates = explode(';', $this->Parameters['date']);
+        for($i = 0; $i < count($dates); $i++)
+          {
+          $d = $dates[$i];
+          if($i > 0)
+            {
+            $q .= " OR ";
+            }
+          if(strpos($d, ',') !== false)
+            {
+            $dd = explode(',', $d);
+            if(count($dd) != 2)
+              {
+              return array('status'=>false, 'message'=>"Incorrect date interval specified: $d");
+              }
+            $q .= "('$dd[0]' <= js.startdate::date AND js.startdate::date <= '$dd[1]')";
+            }
+          else
+            {
+            $q .= "js.startdate::date = '$d'";
+            }
+          }
+          $q .= ")";
+        }
+      $q .= " ORDER BY js.startdate DESC";
+      if(isset($this->Parameters['count']))
+        {
+        $q .= " LIMIT ".$this->Parameters['count'];
+        }
+      }
+
+    $schedules = array();
+    $query = pdo_query($q);
+    while($query_array = pdo_fetch_array($query))
+      {
+      $schedule['id'] = $query_array['id'];
+      $schedule['project'] = $query_array['name'];
+      $schedule['status'] =  "scheduled";
+      switch($query_array['status'])
+        {
+        case CDASH_JOB_SCHEDULED: $schedule['status'] = "scheduled"; break;
+        case CDASH_JOB_RUNNING: $schedule['status'] = "running"; break;
+        case CDASH_JOB_FINISHED: $schedule['status'] = "finished"; break;
+        case CDASH_JOB_ABORTED: $schedule['status'] = "aborted"; break;
+        case CDASH_JOB_FAILED: $schedule['status'] = "failed"; break;
+        }
+      $schedules[] = $schedule;
+      }
+    return array('status'=>true, 'schedules'=>$schedules);
+    } // end function ListSchedules
+
    /** Return the status of a scheduled build */
    private function ScheduleStatus()
     {
@@ -364,6 +507,7 @@ class ScheduleAPI extends WebAPI
     switch($this->Parameters['task'])
       {
       case 'add': return $this->ScheduleBuild();
+      case 'list': return $this->ListSchedules();
       case 'status': return $this->ScheduleStatus();
       default: return array('status'=>false, 'message'=>'Unknown task: '.$this->Parameters['task']);
       }
