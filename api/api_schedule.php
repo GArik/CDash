@@ -439,63 +439,63 @@ class ScheduleAPI extends WebAPI
     return array('status'=>true, 'schedules'=>$schedules);
     } // end function ListSchedules
 
-   /** Return the status of a scheduled build */
-   private function ScheduleStatus()
+   /** Get information about specified schedules
+    * @param schid the list of schedule ids
+    */
+   private function DescribeSchedules()
     {
-    include("../cdash/config.php");
     include_once('../cdash/common.php');
-    include_once("../models/clientjobschedule.php");
-    include_once("../models/clientos.php");
-    include_once("../models/clientcmake.php");
-    include_once("../models/clientcompiler.php");
-    include_once("../models/clientlibrary.php");
+    include_once('../models/clientjob.php');
+    include_once('../models/clientjobschedule.php');
+    include_once('../models/project.php');
 
-    $status = array();
-    $status['scheduled'] = 0;
-    if(!isset($this->Parameters['project']))
+    if(!isset($this->Parameters['schid']))
       {
-      echo "Project name should be set";
-      return;
+      return array('status'=>false, 'message'=>'You must specify a schedule id.');
       }
+    $ids = explode(';', $this->Parameters['schid']);
 
-    $projectid = get_project_id($this->Parameters['project']);
-    if(!is_numeric($projectid) || $projectid<=0)
+    $schedules = array();
+    foreach($ids as $scheduleid)
       {
-      echo "Project not found";
-      return;
-      }
+      $clientJobSchedule = new ClientJobSchedule();
+      $clientJobSchedule->Id = $scheduleid;
 
-    $scheduleid = $this->Parameters['scheduleid'];
-    if(!is_numeric($scheduleid) || $scheduleid<=0)
-      {
-      echo "ScheduleId not set";
-      return;
-      }
+      $project = new Project();
+      $project->Id = $clientJobSchedule->GetProjectId();
+      $clientJobSchedule->ProjectId = $project->Id;
 
-    $clientJobSchedule = new ClientJobSchedule();
-    $clientJobSchedule->Id = $scheduleid;
-    $clientJobSchedule->ProjectId = $projectid;
+      $status = 'scheduled';
+      switch($clientJobSchedule->GetStatus())
+        {
+        case CDASH_JOB_SCHEDULED: $status = "scheduled"; break;
+        case CDASH_JOB_RUNNING: $status = "running"; break;
+        case CDASH_JOB_FINISHED: $status = "finished"; break;
+        case CDASH_JOB_ABORTED: $status = "aborted"; break;
+        case CDASH_JOB_FAILED: $status = "failed"; break;
+        }
 
-    $status['status'] = $clientJobSchedule->GetStatus();
-    switch($status['status'])
-      {
-      case -1: $status['statusstring'] = "not found"; break;
-      case 0: $status['statusstring'] = "scheduled"; break;
-      case 2: $status['statusstring'] = "running"; break;
-      case 3: $status['statusstring'] = "finished"; break;
-      case 4: $status['statusstring'] = "aborted"; break;
-      case 5: $status['statusstring'] = "failed"; break;
-      }
+      $clientJob = new ClientJob();
+      $clientJob->Id = $clientJobSchedule->GetLastJobId();
 
-    $status['scheduleid'] = $clientJobSchedule->Id;
-    $status['builds'] = $clientJobSchedule->GetAssociatedBuilds();
-    $status['scheduled'] = 0;
-    if($status['status']>0)
-      {
-      $status['scheduled'] = 1;
+      $startdate = $clientJob->GetStartDate();
+      $startdate_array = date_parse($startdate);
+      $enddate = $clientJob->GetEndDate();
+      $enddate_array = date_parse($enddate);
+
+      $schedules[] = array('id' => $scheduleid,
+                           'status' => $status,
+                           'project' => $project->GetName(),
+                           'site' => $clientJobSchedule->GetSite(),
+                           'year' => "".$startdate_array['year']."",
+                           'month' => "".$startdate_array['month']."",
+                           'day' => "".$startdate_array['day']."",
+                           'time' => $startdate_array['hour'].':'.$startdate_array['minute'].':'.$startdate_array['second'],
+                           'duration' => date_diff(date_create($startdate), date_create($enddate))->format("%h:%I:%S"),
+                           'build_id' => $clientJobSchedule->GetAssociatedBuilds());
       }
-    return $status;
-    } // end function ScheduleStatus
+    return array('status' => true, 'schedule' => $schedules);
+    } // end function DescribeSchedules
 
   /** Run function */
   function Run()
@@ -508,7 +508,7 @@ class ScheduleAPI extends WebAPI
       {
       case 'add': return $this->ScheduleBuild();
       case 'list': return $this->ListSchedules();
-      case 'status': return $this->ScheduleStatus();
+      case 'describe': return $this->DescribeSchedules();
       default: return array('status'=>false, 'message'=>'Unknown task: '.$this->Parameters['task']);
       }
     }
