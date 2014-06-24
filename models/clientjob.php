@@ -101,7 +101,7 @@ class ClientJob
   /** Set the job has finished */
   function SetFinished()
     {
-    $now = date('Y-m-d H:i:s');
+    $now = gmdate('Y-m-d H:i:s');
     $sql = "UPDATE client_job SET status=".CDASH_JOB_FINISHED.",enddate='".$now."' WHERE siteid=".$this->SiteId." AND status=".CDASH_JOB_RUNNING;
     pdo_query($sql);
     add_last_sql_error("ClientJob::SetFinished");
@@ -110,7 +110,7 @@ class ClientJob
   /** Set the job has failed */
   function SetFailed()
     {
-    $now = date('Y-m-d H:i:s');
+    $now = gmdate('Y-m-d H:i:s');
     $sql = "UPDATE client_job SET status=".CDASH_JOB_FAILED.",enddate='".$now."' WHERE siteid=".$this->SiteId." AND status=".CDASH_JOB_RUNNING;
     pdo_query($sql);
     add_last_sql_error("ClientJob::SetFailed");

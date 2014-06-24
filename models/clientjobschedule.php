@@ -666,9 +666,9 @@ class ClientJobSchedule
       }
 
     $jobid = 0;
-    $now = date(FMT_DATETIMESTD);
-    $currenttime = date(FMT_TIME);
-    $currentday = date(FMT_DATE);
+    $now = gmdate(FMT_DATETIMESTD);
+    $currenttime = gmdate(FMT_TIME);
+    $currentday = gmdate(FMT_DATE);
 
     // Update the lastping
     pdo_query("UPDATE client_site SET lastping='".$now."' WHERE id=".qnum($this->SiteId));
@@ -789,7 +789,7 @@ class ClientJobSchedule
     include('cdash/config.php');
 
     // Update the current run
-    pdo_query("UPDATE client_jobschedule SET lastrun='".date(FMT_DATETIMESTD)."' WHERE id=".qnum($this->Id));
+    pdo_query("UPDATE client_jobschedule SET lastrun='".gmdate(FMT_DATETIMESTD)."' WHERE id=".qnum($this->Id));
 
     $ClientSite = new ClientSite();
     $ClientSite->Id = $this->SiteId;
@@ -797,8 +797,8 @@ class ClientJobSchedule
     // Create a job
     $job = new ClientJob();
     $job->ScheduleId = $this->Id;
-    $job->StartDate = date("Y-m-d H:i:s");
-    $job->EndDate = date("1980-01-01 00:00:00");
+    $job->StartDate = gmdate("Y-m-d H:i:s");
+    $job->EndDate = gmdate("1980-01-01 00:00:00");
     $job->Status = CDASH_JOB_RUNNING;
     $job->SiteId = $this->SiteId;
     $job->OsId = $ClientSite->GetOS();
