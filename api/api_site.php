@@ -87,14 +87,20 @@ class SiteAPI extends WebAPI
 
       $SiteOs = new ClientOS();
       $SiteOs->Id = $Site->GetOS();
+      $lastPing = date_parse($Site->GetLastPing());
 
-      $sites[] = array('id' => $id,
-                       'name' => $Site->GetName(),
-                       'system_name' => $Site->GetSystemName(),
-                       'os_name' => $SiteOs->GetName(),
-                       'os_version' => $SiteOs->GetVersion(),
-                       'bits' => $SiteOs->GetBits(),
-                       'last_ping' => $Site->GetLastPing());
+      $sites[] = array(
+          'id' => $id,
+          'name' => $Site->GetName(),
+          'system_name' => $Site->GetSystemName(),
+          'os_name' => $SiteOs->GetName(),
+          'os_version' => $SiteOs->GetVersion(),
+          'bits' => $SiteOs->GetBits(),
+          'last_ping' => array(
+              'year' => "${lastPing['year']}",
+              'month' => "${lastPing['month']}",
+              'day' => "${lastPing['day']}",
+              'time' => $lastPing['hour'].":".$lastPing['minute'].":".$lastPing['second']));
       }
     return array('status' => true,
                  'sites' => $sites);
