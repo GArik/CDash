@@ -34,6 +34,7 @@ require("api_repository.php");
 require("api_schedule.php");
 require("api_cdash.php");
 require("api_update.php");
+require("api_revision.php");
 
 if(!isset($_GET['method']))
   {
